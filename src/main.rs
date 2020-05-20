@@ -1,5 +1,6 @@
 mod cli;
 mod days;
+mod shared;
 
 fn main() {
     match cli::run() {
