@@ -1,10 +1,5 @@
-mod cli;
-mod days;
-mod shared;
+use advent_of_code_2019_rust;
 
 fn main() {
-    match cli::run() {
-        Ok(v) => println!("{}", v),
-        Err(e) => println!("An error has occured: {}", e),
-    };
+    advent_of_code_2019_rust::run();
 }
