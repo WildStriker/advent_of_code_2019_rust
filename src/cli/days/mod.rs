@@ -5,6 +5,7 @@ use std::io;
 mod day01;
 mod day02;
 mod day03;
+mod day04;
 mod shared;
 
 /// List of Days
@@ -13,6 +14,7 @@ pub enum Days {
     Day01(day01::Day01),
     Day02(day02::Day02),
     Day03(day03::Day03),
+    Day04(day04::Day04),
 }
 
 pub fn run<T>(reader: T, day: Days) -> Result<String, Box<dyn error::Error>>
@@ -32,6 +34,10 @@ where
         Days::Day03(d) => match d.parts {
             shared::Parts::Part01(_) => crate::days::day03::part01(reader),
             shared::Parts::Part02(_) => crate::days::day03::part02(reader),
+        },
+        Days::Day04(d) => match d.parts {
+            shared::Parts::Part01(_) => crate::days::day04::part01(reader),
+            shared::Parts::Part02(_) => crate::days::day04::part02(reader),
         },
     }
 }

@@ -53,9 +53,26 @@ fn day_03(c: &mut Criterion) {
     });
 }
 
+fn day_04(c: &mut Criterion) {
+    let file = fs::read_to_string(Path::new(".").join("inputs").join("day_04.txt")).unwrap();
+    c.bench_function("day_04_part_01", |b| {
+        b.iter(|| {
+            let reader = io::BufReader::new(file.as_bytes());
+            advent_of_code_2019_rust::days::day04::part01(reader).unwrap();
+        })
+    });
+
+    c.bench_function("day_04_part_02", |b| {
+        b.iter(|| {
+            let reader = io::BufReader::new(file.as_bytes());
+            advent_of_code_2019_rust::days::day04::part02(reader).unwrap();
+        })
+    });
+}
+
 criterion_group!(
     name= benches;
     config = Criterion::default();
-    targets = day_01, day_02, day_03
+    targets = day_01, day_02, day_03, day_04
 );
 criterion_main!(benches);
