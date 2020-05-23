@@ -1,6 +1,6 @@
 use clap::Clap;
 
-/// Day 1: The Tyranny of the Rocket Equation
+/// Day 3: Crossed Wires
 #[derive(Clap)]
 pub struct Day03 {
     #[clap(subcommand)]
