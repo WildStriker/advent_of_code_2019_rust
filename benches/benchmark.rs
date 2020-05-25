@@ -87,9 +87,31 @@ fn day_05(c: &mut Criterion) {
     });
 }
 
+fn day_06(c: &mut Criterion) {
+    let file = fs::read_to_string(Path::new(".").join("inputs").join("day_06.txt")).unwrap();
+    c.bench_function("day_06_part_01", |b| {
+        b.iter(|| {
+            let reader = io::BufReader::new(file.as_bytes());
+            advent_of_code_2019_rust::days::day06::part01(reader).unwrap();
+        })
+    });
+
+    c.bench_function("day_06_part_02", |b| {
+        b.iter(|| {
+            let reader = io::BufReader::new(file.as_bytes());
+            advent_of_code_2019_rust::days::day06::part02(
+                reader,
+                "YOU".to_string(),
+                "SAN".to_string(),
+            )
+            .unwrap();
+        })
+    });
+}
+
 criterion_group!(
     name= benches;
     config = Criterion::default();
-    targets = day_01, day_02, day_03, day_04, day_05
+    targets = day_01, day_02, day_03, day_04, day_05, day_06
 );
 criterion_main!(benches);
