@@ -7,6 +7,7 @@ dependencies = [
  "atty",
  "clap 3.0.0-beta.1",
  "criterion",
+ "itertools",
 ]
 
 [[package]]
