@@ -24,15 +24,15 @@ impl Iterator for ParameterModeParser {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.modes == 0 {
-            return Some(Ok(ParameterMode::Immediate));
+            return Some(Ok(ParameterMode::Position));
         }
 
         let mode = self.modes % 10;
         self.modes /= 10;
 
         match mode {
-            0 => Some(Ok(ParameterMode::Immediate)),
-            1 => Some(Ok(ParameterMode::Position)),
+            0 => Some(Ok(ParameterMode::Position)),
+            1 => Some(Ok(ParameterMode::Immediate)),
             x => Some(Err(format!("Unknown Parameter Mode {}", x))),
         }
     }
@@ -104,8 +104,8 @@ impl<'a> Computer<'a> {
     fn read_parameter(&mut self, modes: &mut ParameterModeParser) -> Result<i32, String> {
         let val = self.advance_ptr();
         match modes.next().unwrap()? {
-            ParameterMode::Immediate => Ok(self.ram[val as usize]),
-            ParameterMode::Position => Ok(val),
+            ParameterMode::Position => Ok(self.ram[val as usize]),
+            ParameterMode::Immediate => Ok(val),
         }
     }
 
@@ -113,9 +113,9 @@ impl<'a> Computer<'a> {
     fn set_write_pointer(&mut self, modes: &mut ParameterModeParser) -> Result<(), String> {
         let val = self.advance_ptr() as usize;
         let w_ptr = match modes.next().unwrap()? {
-            ParameterMode::Immediate => val,
-            ParameterMode::Position => {
-                return Err("Output pointers do not support Position Mode!".to_string())
+            ParameterMode::Position => val,
+            ParameterMode::Immediate => {
+                return Err("Output pointers do not support Immediate Mode!".to_string())
             }
         };
 
