@@ -9,6 +9,7 @@ mod day04;
 mod day05;
 mod day06;
 mod day07;
+mod day08;
 mod shared;
 
 /// List of Days
@@ -21,6 +22,7 @@ pub enum Days {
     Day05(day05::Day05),
     Day06(day06::Day06),
     Day07(day07::Day07),
+    Day08(day08::Day08),
 }
 
 pub fn run<T>(reader: T, day: Days) -> Result<String, Box<dyn error::Error>>
@@ -56,6 +58,10 @@ where
         Days::Day07(d) => match d.parts {
             shared::Parts::Part01(_) => crate::days::day07::part01(reader),
             shared::Parts::Part02(_) => crate::days::day07::part02(reader),
+        },
+        Days::Day08(d) => match d.parts {
+            day08::Parts::Part01(p) => crate::days::day08::part01(reader, p.wide, p.tall),
+            day08::Parts::Part02(p) => crate::days::day08::part02(reader, p.wide, p.tall),
         },
     }
 }
