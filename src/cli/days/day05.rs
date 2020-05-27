@@ -17,12 +17,12 @@ pub enum Parts {
 #[derive(Clap)]
 pub struct Part01 {
     #[clap(short = "i", long = "input", default_value = "1")]
-    pub input: i32,
+    pub input: isize,
 }
 
 /// Part 2
 #[derive(Clap)]
 pub struct Part02 {
     #[clap(short = "i", long = "input", default_value = "5")]
-    pub input: i32,
+    pub input: isize,
 }

@@ -1,15 +1,18 @@
 use crate::shared::intcode;
 use itertools::Itertools;
+use std::collections::HashMap;
 use std::error;
-use std::io;
 
 pub struct Amps<'a> {
     amps: Vec<intcode::Computer<'a>>,
-    phases: Vec<i32>,
+    phases: Vec<isize>,
 }
 
 impl<'a> Amps<'a> {
-    pub fn new(mem: &'a Vec<i32>, phases: Vec<i32>) -> Result<Self, Box<dyn error::Error>> {
+    pub fn new(
+        mem: &'a HashMap<usize, isize>,
+        phases: Vec<isize>,
+    ) -> Result<Self, Box<dyn error::Error>> {
         let mut amps = Vec::new();
         for _ in 0..phases.len() {
             amps.push(intcode::Computer::new(&mem));
@@ -18,7 +21,7 @@ impl<'a> Amps<'a> {
         Ok(Self { amps, phases })
     }
 
-    pub fn run(&mut self) -> Result<i32, Box<dyn error::Error>> {
+    pub fn run(&mut self) -> Result<isize, Box<dyn error::Error>> {
         let sequences = (*self.phases)
             .iter()
             .permutations(self.phases.len())

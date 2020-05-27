@@ -17,14 +17,14 @@ pub enum Parts {
 #[derive(Clap)]
 pub struct Part01 {
     #[clap(short = "n", long = "noun", default_value = "12")]
-    pub noun: i32,
+    pub noun: isize,
     #[clap(short = "v", long = "verb", default_value = "2")]
-    pub verb: i32,
+    pub verb: isize,
 }
 
 /// Part 2
 #[derive(Clap)]
 pub struct Part02 {
     #[clap(short = "t", long = "target", default_value = "19690720")]
-    pub target: i32,
+    pub target: isize,
 }

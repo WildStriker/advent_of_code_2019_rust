@@ -3,7 +3,7 @@ use std::io;
 
 use crate::shared::intcode;
 
-pub fn part01<T>(reader: T, input: i32) -> Result<String, Box<dyn error::Error>>
+pub fn part01<T>(reader: T, input: isize) -> Result<String, Box<dyn error::Error>>
 where
     T: io::BufRead,
 {
@@ -22,17 +22,11 @@ where
             }
             intcode::HaltedState::Input => computer.send_input(input),
             intcode::HaltedState::Output(output) => last_output = Some(output),
-            unknown => {
-                return Err(Box::new(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unexpected Halted State: {:?}", unknown),
-                )))
-            }
         }
     }
 }
 
-pub fn part02<T>(reader: T, input: i32) -> Result<String, Box<dyn error::Error>>
+pub fn part02<T>(reader: T, input: isize) -> Result<String, Box<dyn error::Error>>
 where
     T: io::BufRead,
 {
@@ -51,12 +45,6 @@ where
             }
             intcode::HaltedState::Input => computer.send_input(input),
             intcode::HaltedState::Output(output) => last_output = Some(output),
-            unknown => {
-                return Err(Box::new(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unexpected Halted State: {:?}", unknown),
-                )))
-            }
         }
     }
 }

@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::{error, io};
 
 enum ParameterMode {
     Position,
     Immediate,
+    Relative,
 }
 
 /// Outputs Parameter Mode
@@ -33,20 +35,22 @@ impl Iterator for ParameterModeParser {
         match mode {
             0 => Some(Ok(ParameterMode::Position)),
             1 => Some(Ok(ParameterMode::Immediate)),
+            2 => Some(Ok(ParameterMode::Relative)),
             x => Some(Err(format!("Unknown Parameter Mode {}", x))),
         }
     }
 }
 
 enum OpCode {
-    Add { value_1: i32, value_2: i32 },
-    Mul { value_1: i32, value_2: i32 },
-    Input { input: Option<i32> },
-    Output { value_1: i32 },
-    JumpIfTrue { value_1: i32, value_2: i32 },
-    JumpIfFalse { value_1: i32, value_2: i32 },
-    LessThan { value_1: i32, value_2: i32 },
-    Equals { value_1: i32, value_2: i32 },
+    Add { value_1: isize, value_2: isize },
+    Mul { value_1: isize, value_2: isize },
+    Input { input: Option<isize> },
+    Output { value_1: isize },
+    JumpIfTrue { value_1: isize, value_2: isize },
+    JumpIfFalse { value_1: isize, value_2: isize },
+    LessThan { value_1: isize, value_2: isize },
+    Equals { value_1: isize, value_2: isize },
+    UpdateRelativePointer { value_1: isize },
     Halt,
 }
 
@@ -54,25 +58,29 @@ enum OpCode {
 #[derive(Debug)]
 pub enum HaltedState {
     Input,
-    Output(i32),
+    Output(isize),
     Halt,
 }
 
 /// IntCode State Machine
 pub struct Computer<'a> {
-    rom: &'a Vec<i32>,
-    pub ram: Vec<i32>,
+    rom: &'a HashMap<usize, isize>,
+    pub ram: HashMap<usize, isize>,
+
     main_pointer: usize,
+    relative_pointer: usize,
+
     w_ptr: Option<usize>,
 }
 
 impl<'a> Computer<'a> {
     /// Initialize a new Computer
-    pub fn new(rom: &'a Vec<i32>) -> Computer<'a> {
+    pub fn new(rom: &'a HashMap<usize, isize>) -> Computer<'a> {
         Computer {
             rom,
             ram: rom.clone(),
             main_pointer: 0,
+            relative_pointer: 0,
             w_ptr: None,
         }
     }
@@ -94,26 +102,31 @@ impl<'a> Computer<'a> {
     }
 
     /// Read value of current pointer and move to next
-    fn advance_ptr(&mut self) -> i32 {
-        let val = self.ram[self.main_pointer];
+    fn advance_ptr(&mut self) -> isize {
+        let val = *self.ram.entry(self.main_pointer).or_insert(0);
         self.main_pointer += 1;
         val
     }
 
     /// Advances main pointer and retrieves parameter value
-    fn read_parameter(&mut self, modes: &mut ParameterModeParser) -> Result<i32, String> {
+    fn read_parameter(&mut self, modes: &mut ParameterModeParser) -> Result<isize, String> {
         let val = self.advance_ptr();
         match modes.next().unwrap()? {
-            ParameterMode::Position => Ok(self.ram[val as usize]),
+            ParameterMode::Position => Ok(*self.ram.entry(val as usize).or_insert(0)),
             ParameterMode::Immediate => Ok(val),
+            ParameterMode::Relative => Ok(*self
+                .ram
+                .entry((val + self.relative_pointer as isize) as usize)
+                .or_insert(0)),
         }
     }
 
     /// Advances main pointer and sets the write pointer
     fn set_write_pointer(&mut self, modes: &mut ParameterModeParser) -> Result<(), String> {
-        let val = self.advance_ptr() as usize;
+        let val = self.advance_ptr();
         let w_ptr = match modes.next().unwrap()? {
-            ParameterMode::Position => val,
+            ParameterMode::Position => val as usize,
+            ParameterMode::Relative => (val + self.relative_pointer as isize) as usize,
             ParameterMode::Immediate => {
                 return Err("Output pointers do not support Immediate Mode!".to_string())
             }
@@ -124,8 +137,8 @@ impl<'a> Computer<'a> {
     }
 
     /// Write value to the current write pointers location
-    fn write(&mut self, value: i32) {
-        self.ram[self.w_ptr.unwrap()] = value;
+    fn write(&mut self, value: isize) {
+        self.ram.insert(self.w_ptr.unwrap(), value);
     }
 
     /// Read instructions to determine Opcode
@@ -184,6 +197,10 @@ impl<'a> Computer<'a> {
                 self.set_write_pointer(&mut modes)?;
                 Ok(OpCode::Equals { value_1, value_2 })
             }
+            9 => {
+                let value_1 = self.read_parameter(&mut modes)?;
+                Ok(OpCode::UpdateRelativePointer { value_1 })
+            }
             99 => {
                 self.w_ptr = None;
                 Ok(OpCode::Halt)
@@ -240,29 +257,33 @@ impl<'a> Computer<'a> {
                 }
                 None
             }
+            OpCode::UpdateRelativePointer { value_1 } => {
+                self.relative_pointer = (self.relative_pointer as isize + value_1) as usize;
+                None
+            }
             OpCode::Halt => Some(HaltedState::Halt),
         }
     }
 
     /// Execute an input to the current input
-    pub fn send_input(&mut self, input: i32) {
+    pub fn send_input(&mut self, input: isize) {
         let input = Some(input);
         self.execute_instruction(OpCode::Input { input });
     }
 }
 
 /// Helper function to parse memory input from file
-pub fn parse_mem<T>(mut reader: T) -> Result<Vec<i32>, Box<dyn error::Error>>
+pub fn parse_mem<T>(mut reader: T) -> Result<HashMap<usize, isize>, Box<dyn error::Error>>
 where
     T: io::BufRead,
 {
-    let mut mem: Vec<i32> = Vec::new();
+    let mut mem: HashMap<usize, isize> = HashMap::new();
 
     let mut line = String::new();
     reader.read_to_string(&mut line)?;
 
-    for code in line.split(",") {
-        mem.push(code.parse()?);
+    for (index, code) in line.split(",").enumerate() {
+        mem.insert(index, code.parse()?);
     }
 
     Ok(mem)
@@ -275,7 +296,8 @@ pub mod tests {
     #[test]
     pub fn test_parse() {
         let int_string = "1,2,3,4,5";
-        let expected = vec![1, 2, 3, 4, 5];
+
+        let expected = vec![1, 2, 3, 4, 5].into_iter().enumerate().collect();
 
         let actual = parse_mem(int_string.as_bytes()).unwrap();
 
@@ -284,9 +306,9 @@ pub mod tests {
 
     #[test]
     pub fn test_reset() {
-        let expected_ram = vec![1, 2, 3, 4];
+        let expected_ram = vec![1, 2, 3, 4].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&expected_ram);
-        test_computer.ram = vec![1, 1, 1, 1];
+        test_computer.ram = vec![1, 1, 1, 1].into_iter().enumerate().collect();
         test_computer.main_pointer = 99;
 
         test_computer.reset();
@@ -297,19 +319,19 @@ pub mod tests {
 
     #[test]
     pub fn test_advance_ptr() {
-        let test_ram = vec![1, 2, 3, 4];
+        let test_ram = vec![1, 2, 3, 4].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         for index in 0..test_ram.len() {
             let val = test_computer.advance_ptr();
-            assert_eq!(val, test_ram[index]);
+            assert_eq!(val, test_ram[&index]);
             assert_eq!(test_computer.main_pointer, index + 1);
         }
     }
 
     #[test]
     pub fn test_add() {
-        let test_ram = vec![1, 3, 1, 0];
+        let test_ram = vec![1, 3, 1, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
         let opcode = test_computer.read_instruction().unwrap();
 
@@ -325,13 +347,13 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[0], 3);
+        assert_eq!(test_computer.ram[&0], 3);
         assert_eq!(test_computer.main_pointer, 4);
     }
 
     #[test]
     pub fn test_mul() {
-        let test_ram = vec![2, 2, 4, 0, 8];
+        let test_ram = vec![2, 2, 4, 0, 8].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -348,13 +370,13 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[0], 32);
+        assert_eq!(test_computer.ram[&0], 32);
         assert_eq!(test_computer.main_pointer, 4);
     }
 
     #[test]
     pub fn test_input() {
-        let test_ram = vec![3, 2, 0];
+        let test_ram = vec![3, 2, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -365,12 +387,12 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
         assert!(matches!(result.unwrap(), HaltedState::Input));
         test_computer.send_input(99);
-        assert_eq!(test_computer.ram[2], 99);
+        assert_eq!(test_computer.ram[&2], 99);
     }
 
     #[test]
     pub fn test_output() {
-        let test_ram = vec![4, 2, 1000];
+        let test_ram = vec![4, 2, 1000].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -384,7 +406,7 @@ pub mod tests {
 
     #[test]
     pub fn test_jump_if_true() {
-        let test_ram = vec![5, 1, 3, 0];
+        let test_ram = vec![5, 1, 3, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -403,7 +425,7 @@ pub mod tests {
         assert!(matches!(result, None));
         assert_eq!(test_computer.main_pointer, 0);
 
-        let test_ram = vec![5, 3, 0, 0];
+        let test_ram = vec![5, 3, 0, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -424,7 +446,7 @@ pub mod tests {
 
     #[test]
     pub fn test_jump_if_false() {
-        let test_ram = vec![6, 1, 3, 0];
+        let test_ram = vec![6, 1, 3, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -443,7 +465,7 @@ pub mod tests {
         assert!(matches!(result, None));
         assert_eq!(test_computer.main_pointer, 3);
 
-        let test_ram = vec![6, 3, 0, 0];
+        let test_ram = vec![6, 3, 0, 0].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -464,7 +486,7 @@ pub mod tests {
 
     #[test]
     pub fn test_less_than() {
-        let test_ram = vec![7, 1, 2, 4, 18];
+        let test_ram = vec![7, 1, 2, 4, 18].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -481,9 +503,9 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[4], 1);
+        assert_eq!(test_computer.ram[&4], 1);
         assert_eq!(test_computer.main_pointer, 4);
-        let test_ram = vec![7, 0, 3, 4, 18];
+        let test_ram = vec![7, 0, 3, 4, 18].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -500,13 +522,13 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[4], 0);
+        assert_eq!(test_computer.ram[&4], 0);
         assert_eq!(test_computer.main_pointer, 4);
     }
 
     #[test]
     pub fn test_equals() {
-        let test_ram = vec![8, 1, 1, 4, 18];
+        let test_ram = vec![8, 1, 1, 4, 18].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -523,9 +545,9 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[4], 1);
+        assert_eq!(test_computer.ram[&4], 1);
         assert_eq!(test_computer.main_pointer, 4);
-        let test_ram = vec![8, 0, 3, 4, 18];
+        let test_ram = vec![8, 0, 3, 4, 18].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -542,13 +564,34 @@ pub mod tests {
         let result = test_computer.execute_instruction(opcode);
 
         assert!(matches!(result, None));
-        assert_eq!(test_computer.ram[4], 0);
+        assert_eq!(test_computer.ram[&4], 0);
         assert_eq!(test_computer.main_pointer, 4);
     }
 
     #[test]
+    pub fn test_update_base_pointer() {
+        let test_ram = vec![9, 2, 44].into_iter().enumerate().collect();
+        let mut test_computer = Computer::new(&test_ram);
+
+        let opcode = test_computer.read_instruction().unwrap();
+
+        assert!(matches!(
+            opcode,
+            OpCode::UpdateRelativePointer { value_1: 44 }
+        ));
+        assert_eq!(test_computer.main_pointer, 2);
+        assert_eq!(test_computer.w_ptr, None);
+        assert_eq!(test_computer.relative_pointer, 0);
+        let result = test_computer.execute_instruction(opcode);
+        assert!(matches!(result, None));
+        assert_eq!(test_computer.main_pointer, 2);
+        assert_eq!(test_computer.w_ptr, None);
+        assert_eq!(test_computer.relative_pointer, 44);
+    }
+
+    #[test]
     pub fn test_halt() {
-        let test_ram = vec![99];
+        let test_ram: HashMap<usize, isize> = vec![99].into_iter().enumerate().collect();
         let mut test_computer = Computer::new(&test_ram);
 
         let opcode = test_computer.read_instruction().unwrap();
@@ -559,5 +602,65 @@ pub mod tests {
         assert!(matches!(result, Some(HaltedState::Halt)));
         assert_eq!(test_computer.ram, test_ram);
         assert_eq!(test_computer.main_pointer, 1);
+    }
+
+    #[test]
+    fn test_outputs_self() {
+        let test_ram = vec![
+            109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
+        ]
+        .into_iter()
+        .enumerate()
+        .collect();
+        let mut test_computer = Computer::new(&test_ram);
+        let mut all_outputs = Vec::new();
+        loop {
+            match test_computer.run().unwrap() {
+                HaltedState::Halt => break,
+                HaltedState::Output(output) => all_outputs.push(output),
+                HaltedState::Input => panic!("Input not expected!"),
+            }
+        }
+        let all_outputs = all_outputs.into_iter().enumerate().collect();
+        assert_eq!(test_ram, all_outputs);
+    }
+
+    #[test]
+    fn test_large_output() {
+        let test_ram = vec![1102, 34915192, 34915192, 7, 4, 7, 99, 0]
+            .into_iter()
+            .enumerate()
+            .collect();
+        let mut test_computer = Computer::new(&test_ram);
+
+        let expected = 1_219_070_632_396_864;
+
+        let mut result = 0;
+        loop {
+            match test_computer.run().unwrap() {
+                HaltedState::Halt => break,
+                HaltedState::Output(output) => result = output,
+                HaltedState::Input => panic!("Input not expected!"),
+            }
+        }
+        assert_eq!(result, expected);
+
+        let test_ram = vec![104, 1125899906842624, 99]
+            .into_iter()
+            .enumerate()
+            .collect();
+        let mut test_computer = Computer::new(&test_ram);
+
+        let expected = 1_125_899_906_842_624;
+        let mut result = 0;
+        loop {
+            match test_computer.run().unwrap() {
+                HaltedState::Halt => break,
+                HaltedState::Output(output) => result = output,
+                HaltedState::Input => panic!("Input not expected!"),
+            }
+        }
+
+        assert_eq!(result, expected);
     }
 }
